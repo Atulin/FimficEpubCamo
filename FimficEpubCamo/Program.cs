@@ -19,7 +19,6 @@ ZipFile.ExtractToDirectory(sourceFile, tempDirectory);
 // Get all chapter files in the directory
 var allFiles = Directory.EnumerateFiles(tempDirectory, "*.*", SearchOption.AllDirectories).ToImmutableArray();
 var chapterFiles = allFiles.Where(f => f.Contains("chapter-")).ToImmutableArray();
-var otherFiles = allFiles.Except(chapterFiles);
 Console.WriteLine($"Found {allFiles.Length} files, {chapterFiles.Length} chapters");
 
 // Get output file suffix
