@@ -1,61 +1,55 @@
 ﻿using System.Collections.Immutable;
 using System.Diagnostics;
+using System.IO.Compression;
 using System.Text.RegularExpressions;
 
 
-// Get source directory
-Console.WriteLine("Input source directory:");
-var dir = Console.ReadLine() ?? "";
+var tempDirectory = Path.Combine(Path.GetTempPath(), $"FimficEpubCamo_{Random.Shared.Next()}");
+
+Console.WriteLine(tempDirectory);
+
+// Get source file
+Console.WriteLine("Source file:");
+var sourceFile = Console.ReadLine() ?? "";
+
+// Extract the file
+Console.WriteLine("Extracting...");
+ZipFile.ExtractToDirectory(sourceFile, tempDirectory);
 
 // Get all chapter files in the directory
-var files = Directory.EnumerateFiles(dir, "*.*", SearchOption.AllDirectories).ToImmutableArray();
-var chapters = files.Where(f => f.Contains("chapter-")).ToImmutableArray();
-var others = files.Except(chapters);
-Console.WriteLine($"Found {files.Length} files, {chapters.Length} chapters");
+var allFiles = Directory.EnumerateFiles(tempDirectory, "*.*", SearchOption.AllDirectories).ToImmutableArray();
+var chapterFiles = allFiles.Where(f => f.Contains("chapter-")).ToImmutableArray();
+var otherFiles = allFiles.Except(chapterFiles);
+Console.WriteLine($"Found {allFiles.Length} files, {chapterFiles.Length} chapters");
 
-// Get output directory
-Console.WriteLine("Input out directory:");
-var output = Console.ReadLine() ?? "";
-
-// Create it if it doesn't exist
-if (!Directory.Exists(output))
-{
-    Console.WriteLine("Directory does not exist, creating...");
-    Directory.CreateDirectory(output);
-    Console.WriteLine($"Created {output}");
-}
-
-// Copy files
-Console.WriteLine("Copying other files");
-
-foreach (var directory in Directory.GetDirectories(dir, "*", SearchOption.AllDirectories))
-{
-    Directory.CreateDirectory(directory.Replace(dir, output));
-}
-foreach (var file in others)
-{
-    File.Copy(file, file.Replace(dir, output));
-}
-
+// Get output file suffix
+Console.WriteLine("Output file suffix:");
+var outputSuffix = Console.ReadLine() ?? "";
 
 // Asynchronously process chapters
 Console.WriteLine("Processing chapters...");
-await Task.WhenAll(chapters.Select(f => EditFile(dir, output, f)));
+await Task.WhenAll(chapterFiles.Select(EditFile));
 
+// Zip the file back up
+Console.WriteLine("Creating file...");
+ZipFile.CreateFromDirectory(tempDirectory, sourceFile.Replace(".epub", $"-{outputSuffix}.epub"));
 
+// Temp directory cleanup
+Console.WriteLine("Temporary directory cleanup...");
+Directory.Delete(tempDirectory, true);
 
 Console.WriteLine("Finished all!");
 
 Process.Start(new ProcessStartInfo
 {
-    Arguments = output,
+    Arguments = Path.GetDirectoryName(sourceFile),
     FileName = "explorer.exe"
 });
 
 return;
 
 
-async Task EditFile(string sourceDir, string targetDir, string fileName)
+async Task EditFile(string fileName)
 {
     Console.WriteLine($"\tModifying {fileName}");
     var text = await File.ReadAllTextAsync(fileName);
@@ -67,8 +61,8 @@ async Task EditFile(string sourceDir, string targetDir, string fileName)
                                           "{match.Groups[1].Value.CleanUrl()}"
                                           """);
     }
-    
-    await File.WriteAllTextAsync(fileName.Replace(sourceDir, targetDir), text);
+
+    await File.WriteAllTextAsync(fileName, text);
     Console.WriteLine($"\tFinished {fileName}");
 }
 
@@ -80,7 +74,7 @@ internal static class StringExtensions
 internal partial class Program
 {
     [GeneratedRegex("""
-                    \"https\:\/\/camo\.fimfiction\.net\/.+\?url\=(.+?\.png|jpg|jpeg)\"
+                    \"https\:\/\/camo\.fimfiction\.net\/.+\?url\=(.+?)\"
                     """, RegexOptions.Multiline)]
     private static partial Regex MyRegex();
 }
